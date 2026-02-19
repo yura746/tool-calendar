@@ -1,68 +1,258 @@
-const PROXY_URL = "https://delicate-wood-fa46.yura-ravichev94.workers.dev/"; // ВАША ССЫЛКА ИЗ CLOUDFLARE
-
-async function loadMoySkladData() {
-    try {
-        console.log("Загрузка данных из МойСклад...");
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Аренда инструмента 001-260</title>
+    <style>
+        * { box-sizing: border-box; margin: 0; padding: 0; }
+        body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; background: #eef2f7; color: #333; }
         
-        // 1. Получаем все инструменты (260 позиций)
-        const productsResponse = await fetch(`${PROXY_URL}/entity/product?limit=260`);
-        const products = await productsResponse.json();
-        
-        // 2. Получаем активные заказы (брони)
-        const ordersResponse = await fetch(`${PROXY_URL}/entity/customerorder?filter=applicable=true`);
-        const orders = await ordersResponse.json();
-
-        // 3. Строим таблицу (логика сопоставления)
-        renderCalendarTable(products.rows, orders.rows);
-        
-    } catch (e) {
-        console.error("Ошибка при загрузке:", e);
-        alert("Не удалось загрузить данные из МойСклад. Проверьте Cloudflare!");
-    }
-}
-
-function renderCalendarTable(tools, orders) {
-    const tableBody = document.querySelector('.tools-grid');
-    tableBody.innerHTML = ''; // Очищаем таблицу
-
-    tools.forEach(tool => {
-        const row = document.createElement('div');
-        row.className = 'tool-row';
-        
-        // Код из МойСклад (001-260)
-        const toolCode = tool.code || "---"; 
-        
-        let rowHTML = `
-            <div class="tool-name">
-                <span class="tool-icon">🛠</span> ${toolCode} - ${tool.name}
-            </div>
-        `;
-
-        // Генерируем 7 дней недели
-        for (let i = 0; i < 7; i++) {
-            const date = new Date();
-            date.setDate(date.getDate() + i);
-            const dateStr = date.toISOString().split('T')[0];
-
-            // Ищем, есть ли бронь на эту дату и этот инструмент
-            const isBooked = orders.some(order => 
-                order.positions.rows.some(pos => pos.assortment.id === tool.id) &&
-                dateStr >= order.moment.split(' ')[0] // Упрощенная логика по дате
-            );
-
-            rowHTML += `
-                <div class="day-cell-grid ${isBooked ? 'busy-1' : 'free'}" 
-                     title="${isBooked ? 'Занято' : 'Свободно'}">
-                    <span class="status-label">${isBooked ? 'ЗАНЯТО' : 'СВОБОДНО'}</span>
-                </div>
-            `;
+        /* Шапка страницы */
+        .main-header { 
+            background: #1a73e8; 
+            color: white; 
+            padding: 20px; 
+            text-align: center; 
+            box-shadow: 0 4px 12px rgba(0,0,0,0.1);
         }
+        .main-header h1 { font-size: 24px; text-transform: uppercase; letter-spacing: 1px; }
+
+        .container { max-width: 1400px; margin: 20px auto; padding: 0 15px; }
+
+        /* Панель поиска и навигации */
+        .controls { 
+            display: flex; 
+            justify-content: space-between; 
+            align-items: center; 
+            background: white; 
+            padding: 15px 20px; 
+            border-radius: 12px; 
+            margin-bottom: 20px;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.05);
+        }
+        .search-box { flex: 1; max-width: 400px; position: relative; }
+        .search-box input { 
+            width: 100%; 
+            padding: 12px 40px 12px 15px; 
+            border: 1px solid #dfe1e5; 
+            border-radius: 8px; 
+            font-size: 16px;
+        }
+        .nav-buttons { display: flex; gap: 10px; }
+        .btn { 
+            padding: 10px 20px; 
+            border: none; 
+            border-radius: 8px; 
+            cursor: pointer; 
+            font-weight: 600; 
+            transition: 0.2s;
+            background: #f1f3f4;
+        }
+        .btn-blue { background: #1a73e8; color: white; }
+        .btn:hover { opacity: 0.9; transform: translateY(-1px); }
+
+        /* Сетка календаря */
+        .calendar-card { 
+            background: white; 
+            border-radius: 15px; 
+            overflow: hidden; 
+            box-shadow: 0 8px 30px rgba(0,0,0,0.08); 
+        }
+        .grid-header { 
+            display: flex; 
+            background: #f8f9fa; 
+            border-bottom: 2px solid #eee;
+        }
+        .header-cell { 
+            flex: 1; 
+            padding: 15px; 
+            text-align: center; 
+            font-weight: bold; 
+            border-right: 1px solid #eee;
+        }
+        .tool-col-header { flex: 0 0 250px; background: #eee; }
+
+        .tool-row { display: flex; border-bottom: 1px solid #eee; transition: 0.1s; }
+        .tool-row:hover { background: #f1f8ff; }
+
+        .tool-info { 
+            flex: 0 0 250px; 
+            padding: 15px; 
+            background: #fcfcfc; 
+            border-right: 2px solid #eee; 
+            font-weight: 600;
+            display: flex;
+            align-items: center;
+        }
+        .tool-code { 
+            background: #34495e; 
+            color: white; 
+            padding: 2px 6px; 
+            border-radius: 4px; 
+            margin-right: 10px; 
+            font-size: 13px; 
+        }
+
+        .day-cell { 
+            flex: 1; 
+            height: 70px; 
+            border-right: 1px solid #f0f0f0; 
+            display: flex; 
+            align-items: center; 
+            justify-content: center;
+            position: relative;
+        }
+
+        /* Статусы */
+        .status-badge { 
+            width: 90%; 
+            height: 80%; 
+            border-radius: 8px; 
+            display: flex; 
+            flex-direction: column;
+            align-items: center; 
+            justify-content: center; 
+            font-size: 11px; 
+            font-weight: bold;
+            color: white;
+            text-align: center;
+        }
+        .free { background: #ffffff; color: #bdc3c7; border: 1px dashed #bdc3c7; }
+        .free::after { content: 'СВОБОДНО'; }
         
-        row.innerHTML = rowHTML;
-        tableBody.appendChild(row);
-    });
-}
+        .busy { background: linear-gradient(135deg, #6a11cb 0%, #2575fc 100%); }
+        .repair { background: #95a5a6; }
 
-// Запуск при открытии страницы
-document.addEventListener('DOMContentLoaded', loadMoySkladData);
+        /* Адаптивность */
+        @media (max-width: 768px) {
+            .tool-col-header, .tool-info { flex: 0 0 120px; font-size: 12px; }
+            .header-cell { font-size: 12px; padding: 10px 5px; }
+        }
+    </style>
+</head>
+<body>
 
+<div class="main-header">
+    <h1>Аренда строительного инструмента — ПОСУТОЧНО</h1>
+</div>
+
+<div class="container">
+    <div class="controls">
+        <div class="search-box">
+            <input type="text" id="searchInput" placeholder="Поиск инструмента или номера...">
+        </div>
+        <div class="nav-buttons">
+            <button class="btn" onclick="changeWeek(-1)">◀ Пред. неделя</button>
+            <button class="btn btn-blue" id="currentPeriod">15.01 - 21.01</button>
+            <button class="btn" onclick="changeWeek(1)">След. неделя ▶</button>
+        </div>
+    </div>
+
+    <div class="calendar-card">
+        <div class="grid-header" id="gridHeader">
+            <div class="header-cell tool-col-header">ИНСТРУМЕНТ</div>
+            <!-- Дни недели добавятся через JS -->
+        </div>
+        <div id="toolsGrid">
+            <!-- Строки инструментов добавятся через JS -->
+            <div style="padding: 40px; text-align: center; color: #999;">Загрузка данных из МойСклад...</div>
+        </div>
+    </div>
+</div>
+
+<script>
+    // --- НАСТРОЙКИ ---
+    const CLOUDFLARE_URL = "https://your-worker.workers.dev/ms"; // ЗАМЕНИТЕ НА СВОЮ ССЫЛКУ
+
+    // Генерируем даты текущей недели
+    function getWeekDays(offset = 0) {
+        const days = [];
+        const startOfWeek = new Date();
+        startOfWeek.setDate(startOfWeek.getDate() - (startOfWeek.getDay() || 7) + 1 + (offset * 7));
+        
+        for (let i = 0; i < 7; i++) {
+            const d = new Date(startOfWeek);
+            d.setDate(startOfWeek.getDate() + i);
+            days.push(d);
+        }
+        return days;
+    }
+
+    async function loadData() {
+        const weekDays = getWeekDays(0);
+        
+        // Обновляем заголовок дат
+        document.getElementById('currentPeriod').innerText = 
+            `${weekDays[0].toLocaleDateString('ru-RU')} - ${weekDays[6].toLocaleDateString('ru-RU')}`;
+
+        // Рисуем шапку дней
+        const header = document.getElementById('gridHeader');
+        header.innerHTML = '<div class="header-cell tool-col-header">ИНСТРУМЕНТ</div>';
+        const dayNames = ['ПН','ВТ','СР','ЧТ','ПТ','СБ','ВС'];
+        weekDays.forEach((day, idx) => {
+            header.innerHTML += `<div class="header-cell">${dayNames[idx]} ${day.getDate()}</div>`;
+        });
+
+        try {
+            // В РЕАЛЬНОСТИ: тут fetch к вашему Cloudflare
+            // const response = await fetch(`${CLOUDFLARE_URL}/entity/product?limit=260`);
+            // const products = await response.json();
+            
+            // ИМИТАЦИЯ ДАННЫХ ДЛЯ ТЕСТА
+            const mockTools = [
+                {code: '001', name: 'Отбойный молоток'},
+                {code: '015', name: 'Бетономешалка'},
+                {code: '022', name: 'Перфоратор Makita'},
+                {code: '045', name: 'УШМ (Болгарка)'},
+                {code: '067', name: 'Бензопила Stihl'},
+                {code: '102', name: 'Виброплита'},
+                {code: '156', name: 'Лазерный уровень'}
+            ];
+            
+            renderTools(mockTools, weekDays);
+        } catch (e) {
+            document.getElementById('toolsGrid').innerHTML = '<div style="color:red; padding:20px;">Ошибка API</div>';
+        }
+    }
+
+    function renderTools(tools, weekDays) {
+        const grid = document.getElementById('toolsGrid');
+        grid.innerHTML = '';
+
+        tools.forEach(tool => {
+            const row = document.createElement('div');
+            row.className = 'tool-row';
+            row.innerHTML = `
+                <div class="tool-info"><span class="tool-code">${tool.code}</span> ${tool.name}</div>
+            `;
+
+            weekDays.forEach(day => {
+                // Здесь будет логика проверки занятости из заказов
+                const isBusy = Math.random() > 0.7; // Случайная забивка для теста
+                
+                row.innerHTML += `
+                    <div class="day-cell">
+                        <div class="status-badge ${isBusy ? 'busy' : 'free'}">
+                            ${isBusy ? 'ЗАНЯТО<br>ЗАКАЗ №' + Math.floor(Math.random()*100) : ''}
+                        </div>
+                    </div>
+                `;
+            });
+            grid.appendChild(row);
+        });
+
+        // Поиск
+        document.getElementById('searchInput').oninput = function(e) {
+            const val = e.target.value.toLowerCase();
+            document.querySelectorAll('.tool-row').forEach(row => {
+                row.style.display = row.innerText.toLowerCase().includes(val) ? 'flex' : 'none';
+            });
+        };
+    }
+
+    loadData();
+</script>
+
+</body>
+</html>
