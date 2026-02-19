@@ -1,0 +1,104 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Календарь аренды инструментов</title>
+    <script src='https://cdn.jsdelivr.net/npm/fullcalendar@6.1.15/index.global.min.js'></script>
+    <style>
+        body { font-family: Arial, sans-serif; margin: 20px; }
+        #calendar { max-width: 1200px; margin: 0 auto; }
+        .fc-event { cursor: pointer; border-radius: 4px; font-size: 11px; }
+        .fc-event:hover { opacity: 0.8; }
+        .event-info { display: none; position: absolute; background: white; 
+                      border: 1px solid #ccc; padding: 10px; z-index: 1000; 
+                      box-shadow: 0 2px 10px rgba(0,0,0,0.1); }
+        .fc-daygrid-day-frame { min-height: 80px; }
+    </style>
+</head>
+<body>
+    <h1>Календарь занятости инструментов</h1>
+    <div id='calendar'></div>
+    <div id="event-info" class="event-info"></div>
+
+    <script>
+        // Тестовые данные (замените на API МойСклад)
+        const testData = [
+            { id: '001', title: 'Перфоратор Bosch', start: '2024-02-15', end: '2024-02-17', 
+              client: 'Иванов И.И.', phone: '+7(999)123-45-67', resource: 1 },
+            { id: '005', title: 'Шуруповерт Makita', start: '2024-02-16', end: '2024-02-20', 
+              client: 'Петров П.П.', phone: '+7(999)765-43-21', resource: 2 },
+            // Добавьте больше тестовых записей
+        ];
+
+        document.addEventListener('DOMContentLoaded', function() {
+            const calendarEl = document.getElementById('calendar');
+            const infoEl = document.getElementById('event-info');
+
+            const calendar = new FullCalendar.Calendar(calendarEl, {
+                initialView: 'resourceTimelineWeek',
+                headerToolbar: {
+                    left: 'prev,next today',
+                    center: 'title',
+                    right: 'dayGridMonth,timeGridWeek,timeGridDay'
+                },
+                resources: [
+                    { id: '1', title: 'Перфораторы (001-010)' },
+                    { id: '2', title: 'Шуруповерты (011-020)' },
+                    { id: '3', title: 'Бетонорез (021-025)' },
+                    // Добавьте все 26 групп инструментов
+                ],
+                events: testData.map(event => ({
+                    id: event.id,
+                    resourceId: event.resource,
+                    title: event.title,
+                    start: event.start,
+                    end: event.end,
+                    extendedProps: {
+                        client: event.client,
+                        phone: event.phone
+                    }
+                })),
+                eventClick: function(info) {
+                    const event = info.event;
+                    infoEl.innerHTML = `
+                        <strong>${event.title}</strong><br>
+                        Клиент: ${event.extendedProps.client}<br>
+                        Телефон: ${event.extendedProps.phone}<br>
+                        Период: ${event.start.toLocaleDateString()} - ${event.end.toLocaleDateString()}
+                    `;
+                    infoEl.style.display = 'block';
+                    infoEl.style.left = (info.jsEvent.pageX + 10) + 'px';
+                    infoEl.style.top = (info.jsEvent.pageY + 10) + 'px';
+                    
+                    setTimeout(() => { infoEl.style.display = 'none'; }, 5000);
+                },
+                eventMouseLeave: function() {
+                    infoEl.style.display = 'none';
+                },
+                height: 'auto',
+                aspectRatio: 2.5
+            });
+
+            calendar.render();
+
+            // Функция для загрузки данных из МойСклад (будет вызываться каждые 5 мин)
+            async function loadFromMoySklad() {
+                try {
+                    // Пример запроса (нужен API ключ через Cloudflare Worker)
+                    const response = await fetch('YOUR_CLOUDFLARE_WORKER_URL');
+                    const data = await response.json();
+                    
+                    calendar.removeAllEvents();
+                    calendar.addEventSource(data.events);
+                } catch(e) {
+                    console.log('Загрузка данных временно недоступна');
+                }
+            }
+
+            // Загрузка каждые 5 минут
+            setInterval(loadFromMoySklad, 300000);
+        });
+    </script>
+</body>
+</html>
