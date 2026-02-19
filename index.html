@@ -3,88 +3,172 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Система Контроля Инструмента 001-260</title>
-    
-    <!-- Подключаем БЕСПЛАТНОЕ ядро FullCalendar -->
-    <script src="https://cdn.jsdelivr.net/npm/fullcalendar@6.1.10/index.global.min.js"></script>
-    
+    <title>Аренда строй инструмента - Посуточно</title>
     <style>
-        :root { --main-color: #3498db; --rent-active: #e67e22; }
-        body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; margin: 0; background: #f0f2f5; }
-        .header { background: #fff; padding: 15px 25px; box-shadow: 0 2px 5px rgba(0,0,0,0.1); display: flex; justify-content: space-between; align-items: center; }
-        .container { padding: 20px; max-width: 1200px; margin: 0 auto; }
-        #calendar { background: #fff; padding: 20px; border-radius: 10px; box-shadow: 0 4px 15px rgba(0,0,0,0.05); min-height: 700px; }
+        * { box-sizing: border-box; margin: 0; padding: 0; }
+        body { font-family: 'Segoe UI', sans-serif; background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); min-height: 100vh; }
         
-        /* Стиль кнопок переключения */
-        .fc-button-primary { background-color: var(--main-color) !important; border-color: var(--main-color) !important; border-radius: 8px !important; text-transform: capitalize !important; }
-        .fc-toolbar-title { color: #2c3e50; font-weight: bold; }
+        .container { max-width: 1400px; margin: 0 auto; padding: 20px; }
         
-        /* Стили плашек брони */
-        .rent-event { background-color: var(--rent-active) !important; border: none !important; border-left: 4px solid #d35400 !important; border-radius: 4px !important; padding: 2px 5px !important; }
-        .fc-event-time { font-weight: bold; }
+        .header { 
+            background: rgba(255,255,255,0.95); 
+            backdrop-filter: blur(10px); 
+            border-radius: 20px; 
+            padding: 25px; 
+            margin-bottom: 30px; 
+            box-shadow: 0 10px 40px rgba(0,0,0,0.2); 
+            text-align: center;
+        }
+        .title { font-size: 28px; font-weight: 700; color: #2c3e50; margin-bottom: 15px; }
+        .search-bar { position: relative; max-width: 400px; margin: 0 auto 20px; }
+        .search-input { width: 100%; padding: 15px 50px 15px 20px; border: none; border-radius: 50px; font-size: 16px; box-shadow: 0 5px 20px rgba(0,0,0,0.1); }
+        .search-icon { position: absolute; right: 20px; top: 50%; transform: translateY(-50%); font-size: 20px; color: #7f8c8d; }
+        
+        .calendar-header { 
+            background: rgba(255,255,255,0.95); 
+            border-radius: 20px; 
+            padding: 20px; 
+            margin-bottom: 20px; 
+            display: flex; 
+            justify-content: space-between; 
+            align-items: center; 
+            box-shadow: 0 5px 25px rgba(0,0,0,0.1);
+        }
+        .nav-btn { background: #3498db; color: white; border: none; padding: 12px 24px; border-radius: 10px; cursor: pointer; font-weight: 600; transition: all 0.3s; }
+        .nav-btn:hover { background: #2980b9; transform: translateY(-2px); }
+        .add-btn { background: #27ae60; }
+        .add-btn:hover { background: #229954; }
+        
+        .calendar-grid { 
+            background: rgba(255,255,255,0.95); 
+            border-radius: 20px; 
+            padding: 25px; 
+            box-shadow: 0 10px 40px rgba(0,0,0,0.2); 
+            overflow-x: auto;
+        }
+        
+        .days-row { display: flex; background: linear-gradient(90deg, #3498db, #2980b9); color: white; border-radius: 15px 15px 0 0; overflow: hidden; }
+        .day-cell { flex: 1; padding: 20px 10px; text-align: center; font-weight: 600; font-size: 16px; }
+        
+        .tools-grid { display: flex; flex-direction: column; }
+        .tool-row { 
+            display: flex; 
+            border-bottom: 1px solid #ecf0f1; 
+            transition: all 0.3s;
+        }
+        .tool-row:hover { background: #f8f9fa; transform: scale(1.01); }
+        .tool-name { 
+            flex: 1; 
+            padding: 20px 15px; 
+            font-weight: 600; 
+            background: #ecf0f1; 
+            border-right: 2px solid #bdc3c7;
+            display: flex; align-items: center;
+        }
+        .tool-icon { font-size: 24px; margin-right: 10px; }
+        
+        .day-cell-grid { flex: 1; min-width: 120px; height: 80px; border-right: 1px solid #ecf0f1; position: relative; cursor: pointer; transition: all 0.3s; }
+        .day-cell-grid:last-child { border-right: none; }
+        
+        /* Статусы */
+        .free { background: #2ecc71; }
+        .busy-1 { background: linear-gradient(135deg, #e74c3c 0%, #c0392b 100%); }
+        .busy-2 { background: linear-gradient(135deg, #f39c12 0%, #e67e22 100%); }
+        .busy-3 { background: linear-gradient(135deg, #3498db 0%, #2980b9 100%); }
+        .repair { background: #95a5a6; }
+        
+        .status-label { position: absolute; bottom: 5px; right: 5px; font-size: 10px; color: white; font-weight: bold; }
     </style>
 </head>
 <body>
-
-    <div class="header">
-        <h2 style="margin:0">🛠 Прокат: Инвентарь 001-260</h2>
-        <div id="status">Статус: <span style="color:green">● В сети (API активен)</span></div>
-    </div>
-
     <div class="container">
-        <!-- Поле для поиска конкретного номера -->
-        <input type="text" id="toolSearch" placeholder="Найти номер (например, 015)..." 
-               style="width: 100%; padding: 12px; margin-bottom: 20px; border-radius: 8px; border: 1px solid #ddd; font-size: 16px;">
+        <div class="header">
+            <div class="title">🔨 Аренда строй инструмента — Посуточно</div>
+            <div class="search-bar">
+                <input type="text" class="search-input" placeholder="Поиск по номеру или названию...">
+                <span class="search-icon">🔍</span>
+            </div>
+        </div>
         
-        <div id="calendar"></div>
-    </div>
-
-    <script>
-        document.addEventListener('DOMContentLoaded', function() {
-            var calendarEl = document.getElementById('calendar');
+        <div class="calendar-header">
+            <button class="nav-btn">◀️ Седня</button>
+            <div style="font-weight:600; font-size:18px;">Пн 15.01 - Вс 21.01</div>
+            <div>
+                <button class="nav-btn">Неделя ▶️</button>
+                <button class="nav-btn add-btn">+ Добавить</button>
+            </div>
+        </div>
+        
+        <div class="calendar-grid">
+            <div class="days-row">
+                <div class="day-cell">Пн 15</div>
+                <div class="day-cell">Вт 16</div>
+                <div class="day-cell">Ср 17</div>
+                <div class="day-cell">Чт 18</div>
+                <div class="day-cell">Пт 19</div>
+                <div class="day-cell">Сб 20</div>
+                <div class="day-cell">Вс 21</div>
+            </div>
             
-            var calendar = new FullCalendar.Calendar(calendarEl, {
-                initialView: 'dayGridMonth', // Главный вид - месяц
-                locale: 'ru',
-                firstDay: 1, // Начать неделю с понедельника
-                headerToolbar: {
-                    left: 'prev,next today',
-                    center: 'title',
-                    right: 'dayGridMonth,timeGridWeek,timeGridDay'
-                },
-                buttonText: {
-                    today: 'Сегодня',
-                    month: 'Месяц',
-                    week: 'Неделя',
-                    day: 'День'
-                },
+            <div class="tools-grid">
+                <div class="tool-row">
+                    <div class="tool-name">
+                        <span class="tool-icon">🔨</span> Отбойник №001
+                    </div>
+                    <div class="day-cell-grid free" title="Свободен">
+                        <span class="status-label">Свободен</span>
+                    </div>
+                    <div class="day-cell-grid busy-1" title="Иванов до 18:00">
+                        <span class="status-label">Занят</span>
+                    </div>
+                    <div class="day-cell-grid free">
+                        <span class="status-label">Свободен</span>
+                    </div>
+                    <div class="day-cell-grid busy-2">
+                        <span class="status-label">Занят</span>
+                    </div>
+                    <div class="day-cell-grid free">
+                        <span class="status-label">Свободен</span>
+                    </div>
+                    <div class="day-cell-grid free">
+                        <span class="status-label">Свободен</span>
+                    </div>
+                    <div class="day-cell-grid free">
+                        <span class="status-label">Свободен</span>
+                    </div>
+                </div>
                 
-                // ТЕСТОВЫЕ ДАННЫЕ (сюда робот МойСклад будет слать инфу)
-                events: [
-                    { title: '№001 Шуруповерт (Иванов)', start: '2024-05-22T09:00:00', end: '2024-05-23T18:00:00', className: 'rent-event' },
-                    { title: '№215 Лестница (Смирнов)', start: '2024-05-24T10:00:00', end: '2024-05-24T20:00:00', className: 'rent-event' },
-                    { title: '№042 Болгарка (РЕМОНТ)', start: '2024-05-20', end: '2024-05-22', color: '#95a5a6' }
-                ],
+                <div class="tool-row">
+                    <div class="tool-name">
+                        <span class="tool-icon">🔩</span> Перфоратор №015
+                    </div>
+                    <div class="day-cell-grid busy-3">
+                        <span class="status-label">Занят</span>
+                    </div>
+                    <div class="day-cell-grid repair">
+                        <span class="status-label">Ремонт</span>
+                    </div>
+                    <div class="day-cell-grid free">
+                        <span class="status-label">Свободен</span>
+                    </div>
+                    <div class="day-cell-grid busy-1">
+                        <span class="status-label">Занят</span>
+                    </div>
+                    <div class="day-cell-grid free">
+                        <span class="status-label">Свободен</span>
+                    </div>
+                    <div class="day-cell-grid busy-2">
+                        <span class="status-label">Занят</span>
+                    </div>
+                    <div class="day-cell-grid free">
+                        <span class="status-label">Свободен</span>
+                    </div>
+                </div>
                 
-                eventClick: function(info) {
-                    alert('Заказ: ' + info.event.title + '\nВозврат: ' + info.event.end.toLocaleString());
-                }
-            });
-
-            calendar.render();
-
-            // Поиск по номеру
-            document.getElementById('toolSearch').addEventListener('input', function(e) {
-                var searchTerm = e.target.value;
-                calendar.getEvents().forEach(function(event) {
-                    if (event.title.includes(searchTerm)) {
-                        event.setProp('display', 'auto');
-                    } else {
-                        event.setProp('display', 'none');
-                    }
-                });
-            });
-        });
-    </script>
+                <!-- Добавьте остальные 258 строк аналогично -->
+                
+            </div>
+        </div>
+    </div>
 </body>
 </html>
