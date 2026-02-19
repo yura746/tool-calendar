@@ -280,46 +280,69 @@ function bookingForDate(tool, dateYmd){
   return tool.bookings.find(b => b.date === dateYmd) || null;
 }
 
-function renderGrid(tools, week){
+function renderGrid(tools, week) {
   const frag = document.createDocumentFragment();
 
-  // Показываем только инструменты, которые сейчас в прокате
-  tools.forEach(tool=>{
-    const row = document.createElement('div');
-    row.className = 'row';
-    row.dataset.search = `${tool.code||''} ${tool.name||''}`.toLowerCase();
-
-    const toolDiv = document.createElement('div');
-    toolDiv.className = 'tool';
-    toolDiv.innerHTML = `<span class="code">${tool.code || '---'}</span><span>${tool.name || ''}</span>`;
-    row.appendChild(toolDiv);
-
-    week.days.forEach(d=>{
-      const dateStr = ymd(d);
-      const b = bookingForDate(tool, dateStr);
-
-      const cell = document.createElement('div');
-      cell.className = 'cell';
-
-      const pill = document.createElement('div');
-      
-      if (b) {
-        // Есть бронь в прокате
-        pill.className = 'pill busy';
-        pill.innerHTML = `В ПРОКАТЕ<div class="small">${(b.client || 'Клиент').slice(0,18)}</div>`;
-        pill.title = `${tool.code} ${tool.name}\nДата: ${dateStr}\nКлиент: ${b.client || 'Клиент'}\nЗаказ: ${b.orderName || ''}`.trim();
-        pill.onclick = () => openDetails(tool, dateStr, b);
-      } else {
-        // Нет брони на эту дату
-        pill.className = 'pill free';
-        pill.title = `${tool.code} ${tool.name}\n${dateStr}\nСвободен`;
+  // Сначала группируем инструменты по заказам
+  const ordersMap = new Map();
+  
+  tools.forEach(tool => {
+    tool.bookings.forEach(booking => {
+      const orderKey = `${booking.orderId}_${booking.date}`;
+      if (!ordersMap.has(orderKey)) {
+        ordersMap.set(orderKey, {
+          orderId: booking.orderId,
+          date: booking.date,
+          client: booking.client,
+          orderName: booking.orderName,
+          tools: []
+        });
       }
-
-      cell.appendChild(pill);
-      row.appendChild(cell);
+      ordersMap.get(orderKey).tools.push(tool);
     });
+  });
 
-    frag.appendChild(row);
+  // Теперь создаем строки по заказам
+  Array.from(ordersMap.values()).forEach(order => {
+    // Создаем строку для каждого инструмента в заказе
+    order.tools.forEach(tool => {
+      const row = document.createElement('div');
+      row.className = 'row';
+      row.dataset.search = `${tool.code||''} ${tool.name||''}`.toLowerCase();
+
+      const toolDiv = document.createElement('div');
+      toolDiv.className = 'tool';
+      toolDiv.innerHTML = `<span class="code">${tool.code || '---'}</span><span>${tool.name || ''}</span>`;
+      row.appendChild(toolDiv);
+
+      week.days.forEach(d => {
+        const dateStr = ymd(d);
+        const cell = document.createElement('div');
+        cell.className = 'cell';
+
+        const pill = document.createElement('div');
+        
+        if (dateStr === order.date) {
+          // Этот день совпадает с датой заказа - показываем "В ПРОКАТЕ"
+          pill.className = 'pill busy';
+          pill.innerHTML = `В ПРОКАТЕ<div class="small">${(order.client || 'Клиент').slice(0,18)}</div>`;
+          pill.title = `${tool.code} ${tool.name}\nДата: ${dateStr}\nКлиент: ${order.client}\nЗаказ: ${order.orderName}`;
+          pill.onclick = () => openDetails(tool, dateStr, {
+            client: order.client,
+            orderName: order.orderName
+          });
+        } else {
+          // Другие дни - свободно
+          pill.className = 'pill free';
+          pill.title = `${tool.code} ${tool.name}\n${dateStr}\nСвободен`;
+        }
+
+        cell.appendChild(pill);
+        row.appendChild(cell);
+      });
+
+      frag.appendChild(row);
+    });
   });
 
   elBody.innerHTML = '';
@@ -419,3 +442,4 @@ refresh();
 </script>
 </body>
 </html>
+
