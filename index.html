@@ -6,98 +6,123 @@
     <title>Календарь аренды инструментов</title>
     <script src='https://cdn.jsdelivr.net/npm/fullcalendar@6.1.15/index.global.min.js'></script>
     <style>
-        body { font-family: Arial, sans-serif; margin: 20px; }
-        #calendar { max-width: 1200px; margin: 0 auto; }
-        .fc-event { cursor: pointer; border-radius: 4px; font-size: 11px; }
-        .fc-event:hover { opacity: 0.8; }
-        .event-info { display: none; position: absolute; background: white; 
-                      border: 1px solid #ccc; padding: 10px; z-index: 1000; 
-                      box-shadow: 0 2px 10px rgba(0,0,0,0.1); }
-        .fc-daygrid-day-frame { min-height: 80px; }
+        body { font-family: -apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif; margin: 0; background: #f8f9fa; }
+        .container { max-width: 1400px; margin: 0 auto; padding: 20px; }
+        h1 { color: #2c3e50; margin-bottom: 10px; }
+        .toolbar { background: white; padding: 15px; border-radius: 12px; box-shadow: 0 2px 10px rgba(0,0,0,0.08); margin-bottom: 20px; }
+        #calendar { background: white; border-radius: 12px; overflow: hidden; box-shadow: 0 4px 20px rgba(0,0,0,0.1); }
+        .fc-toolbar-title { font-size: 24px; font-weight: 600; color: #2c3e50 !important; }
+        .fc-button { background: #3498db !important; border: none !important; border-radius: 6px !important; }
+        .fc-button:hover { background: #2980b9 !important; }
+        .fc-event { border-radius: 6px !important; font-size: 12px !important; font-weight: 500; }
+        .fc-event-title { display: none; }
+        .event-info { position: fixed; background: white; border: 1px solid #e0e6ed; 
+                      padding: 15px; border-radius: 8px; z-index: 9999; box-shadow: 0 10px 30px rgba(0,0,0,0.2); 
+                      max-width: 300px; display: none; }
+        .resource-group { font-weight: 600; color: #2c3e50; }
     </style>
 </head>
 <body>
-    <h1>Календарь занятости инструментов</h1>
-    <div id='calendar'></div>
-    <div id="event-info" class="event-info"></div>
+    <div class="container">
+        <h1>📅 Календарь проката инструментов (001-260)</h1>
+        <div class="toolbar">
+            <div>Обновлено: <span id="last-update">загрузка...</span></div>
+            <button onclick="reloadCalendar()">🔄 Обновить данные</button>
+        </div>
+        <div id='calendar'></div>
+        <div id="event-info" class="event-info">
+            <div id="event-details"></div>
+        </div>
+    </div>
 
     <script>
-        // Тестовые данные (замените на API МойСклад)
-        const testData = [
-            { id: '001', title: 'Перфоратор Bosch', start: '2024-02-15', end: '2024-02-17', 
-              client: 'Иванов И.И.', phone: '+7(999)123-45-67', resource: 1 },
-            { id: '005', title: 'Шуруповерт Makita', start: '2024-02-16', end: '2024-02-20', 
-              client: 'Петров П.П.', phone: '+7(999)765-43-21', resource: 2 },
-            // Добавьте больше тестовых записей
-        ];
+        let calendar;
+        let allTools = [];
 
         document.addEventListener('DOMContentLoaded', function() {
             const calendarEl = document.getElementById('calendar');
-            const infoEl = document.getElementById('event-info');
-
-            const calendar = new FullCalendar.Calendar(calendarEl, {
-                initialView: 'resourceTimelineWeek',
+            
+            calendar = new FullCalendar.Calendar(calendarEl, {
+                initialView: 'resourceTimeGridWeek', // Неделя по умолчанию
+                views: {
+                    resourceTimeGridWeek: { type: 'resourceTimeGrid', duration: { weeks: 1 } },
+                    resourceTimeGridDay: { type: 'resourceTimeGrid', duration: { days: 1 } },
+                    resourceDayGridMonth: { type: 'resourceDayGridMonth', duration: { months: 1 } }
+                },
                 headerToolbar: {
                     left: 'prev,next today',
                     center: 'title',
-                    right: 'dayGridMonth,timeGridWeek,timeGridDay'
+                    right: 'timeGridWeek,timeGridDay,dayGridMonth'
                 },
-                resources: [
-                    { id: '1', title: 'Перфораторы (001-010)' },
-                    { id: '2', title: 'Шуруповерты (011-020)' },
-                    { id: '3', title: 'Бетонорез (021-025)' },
-                    // Добавьте все 26 групп инструментов
-                ],
-                events: testData.map(event => ({
-                    id: event.id,
-                    resourceId: event.resource,
-                    title: event.title,
-                    start: event.start,
-                    end: event.end,
-                    extendedProps: {
-                        client: event.client,
-                        phone: event.phone
-                    }
-                })),
-                eventClick: function(info) {
-                    const event = info.event;
-                    infoEl.innerHTML = `
-                        <strong>${event.title}</strong><br>
-                        Клиент: ${event.extendedProps.client}<br>
-                        Телефон: ${event.extendedProps.phone}<br>
-                        Период: ${event.start.toLocaleDateString()} - ${event.end.toLocaleDateString()}
-                    `;
-                    infoEl.style.display = 'block';
-                    infoEl.style.left = (info.jsEvent.pageX + 10) + 'px';
-                    infoEl.style.top = (info.jsEvent.pageY + 10) + 'px';
-                    
-                    setTimeout(() => { infoEl.style.display = 'none'; }, 5000);
-                },
-                eventMouseLeave: function() {
-                    infoEl.style.display = 'none';
-                },
+                resources: generateToolGroups(), // 26 групп инструментов
+                events: [],
                 height: 'auto',
-                aspectRatio: 2.5
+                aspectRatio: 2.8,
+                slotMinTime: '08:00:00',
+                slotMaxTime: '20:00:00',
+                nowIndicator: true,
+                eventClick: showEventInfo,
+                eventMouseEnter: showEventTooltip,
+                eventMouseLeave: hideEventTooltip
             });
 
             calendar.render();
+            loadRealData(); // Загрузка тестовых данных
+        });
 
-            // Функция для загрузки данных из МойСклад (будет вызываться каждые 5 мин)
-            async function loadFromMoySklad() {
-                try {
-                    // Пример запроса (нужен API ключ через Cloudflare Worker)
-                    const response = await fetch('YOUR_CLOUDFLARE_WORKER_URL');
-                    const data = await response.json();
-                    
-                    calendar.removeAllEvents();
-                    calendar.addEventSource(data.events);
-                } catch(e) {
-                    console.log('Загрузка данных временно недоступна');
-                }
+        // Генерация групп инструментов (001-260)
+        function generateToolGroups() {
+            const groups = [];
+            const groupNames = ['Перфораторы', 'Шуруповерты', 'Болгарки', 'Штроборезы', 'Лестницы'];
+            
+            for (let i = 1; i <= 26; i++) {
+                groups.push({
+                    id: i,
+                    title: `${groupNames[i%5]} (${(i-1)*10+1}-${i*10})`,
+                    children: []
+                });
             }
+            return groups;
+        }
 
-            // Загрузка каждые 5 минут
-            setInterval(loadFromMoySklad, 300000);
+        // Тестовые данные (заменить на МойСклад API)
+        async function loadRealData() {
+            // Имитация данных из МойСклад
+            const mockBookings = [
+                { id: '001', resourceId: 1, title: 'Перфоратор №001', start: '2024-02-15T10:00:00', 
+                  end: '2024-02-16T18:00:00', client: 'Иванов И.И.', phone: '+7(999)123-45-67' },
+                { id: '005', resourceId: 1, title: 'Перфоратор №005', start: '2024-02-16T14:00:00', 
+                  end: '2024-02-18T12:00:00', client: 'Петров П.П.', phone: '+7(999)765-43-21' },
+                { id: '011', resourceId: 2, title: 'Шуруповерт №011', start: '2024-02-17T09:00:00', 
+                  end: '2024-02-18T17:00:00', client: 'Сидоров С.С.', phone: '+7(999)111-22-33' }
+            ];
+
+            calendar.removeAllEvents();
+            calendar.addEventSource(mockBookings);
+            document.getElementById('last-update').textContent = new Date().toLocaleString();
+        }
+
+        function showEventInfo(info) {
+            const event = info.event;
+            const details = document.getElementById('event-details');
+            details.innerHTML = `
+                <h4>${event.title}</h4>
+                <p><strong>Клиент:</strong> ${event.extendedProps.client}</p>
+                <p><strong>Телефон:</strong> ${event.extendedProps.phone}</p>
+                <p><strong>Период:</strong> ${event.start.toLocaleString()} - ${event.end.toLocaleString()}</p>
+            `;
+            document.getElementById('event-info').style.display = 'block';
+        }
+
+        function reloadCalendar() {
+            loadRealData();
+        }
+
+        // Закрытие инфо по клику вне области
+        document.addEventListener('click', function(e) {
+            if (!e.target.closest('.fc-event')) {
+                document.getElementById('event-info').style.display = 'none';
+            }
         });
     </script>
 </body>
