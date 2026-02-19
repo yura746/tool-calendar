@@ -134,6 +134,7 @@
       line-height: 1.15;
     }
     .free { background: #ffffff; border: 2px dashed #cbd5e1; color:#94a3b8; }
+    .free::after { content: "СВОБОДНО"; }
     .busy { background: linear-gradient(135deg,#6a11cb 0%, #2575fc 100%); color:#fff; box-shadow: inset 0 0 0 1px rgba(255,255,255,.18); }
     .repair { background:#9ca3af; color:#fff; }
     .small { font-weight: 800; opacity: .92; font-size: 10px; }
@@ -189,13 +190,13 @@
         <div style="padding:26px; text-align:center; color:#6b7280; font-weight:800;">Загрузка…</div>
       </div>
       <div class="footerNote">
-        Подсказка: брони берутся из МойСклад через Cloudflare Worker. Ячейка «ЗАНЯТО» означает, что на эту дату есть заказ с этим инструментом.
+        Показываются только инструменты, которые сейчас находятся в прокате (статус заказа «В прокате»).
       </div>
     </div>
   </div>
 
   <dialog id="dlg">
-    <div class="modalTop">Детали брони</div>
+    <div class="modalTop">Детали проката</div>
     <div class="modalBody" id="dlgBody"></div>
     <div class="modalBtns">
       <button class="btn" id="dlgClose">Закрыть</button>
@@ -204,11 +205,10 @@
 
 <script>
 /**
- * ВАЖНО:
- * 1) В Cloudflare Worker у вас эндпоинт отдаёт JSON вида: { tools: [...] }
- * 2) Здесь мы НЕ храним токен. Только публичный URL вашего воркера.
+ * ВАЖНО: Замените эту ссылку на адрес вашего Cloudflare Worker
+ * Пример: "https://moysklad-proxy.ваше-имя.workers.dev"
  */
-const WORKER_CALENDAR_URL = "https://delicate-wood-fa46.yura-ravichev94.workers.dev/"; // <-- ЗАМЕНИТЕ на ваш домен воркера
+const WORKER_CALENDAR_URL = "https://delicate-wood-fa46.yura-ravichev94.workers.dev/"; // <-- ЗАМЕНИТЕ НА ВАШУ ССЫЛКУ
 
 let weekOffset = 0;
 let cacheTools = [];
@@ -283,6 +283,7 @@ function bookingForDate(tool, dateYmd){
 function renderGrid(tools, week){
   const frag = document.createDocumentFragment();
 
+  // Показываем только инструменты, которые сейчас в прокате
   tools.forEach(tool=>{
     const row = document.createElement('div');
     row.className = 'row';
@@ -301,13 +302,17 @@ function renderGrid(tools, week){
       cell.className = 'cell';
 
       const pill = document.createElement('div');
-      if (!b){
-        pill.className = 'pill free';
-      } else {
+      
+      if (b) {
+        // Есть бронь в прокате
         pill.className = 'pill busy';
-        pill.innerHTML = `ЗАНЯТО<div class="small">${(b.client || 'Клиент').slice(0,18)}</div>`;
-        pill.title = `${tool.code} ${tool.name}\n${dateStr}\n${b.client || 'Клиент'}\n${b.orderName || ''}`.trim();
+        pill.innerHTML = `В ПРОКАТЕ<div class="small">${(b.client || 'Клиент').slice(0,18)}</div>`;
+        pill.title = `${tool.code} ${tool.name}\nДата: ${dateStr}\nКлиент: ${b.client || 'Клиент'}\nЗаказ: ${b.orderName || ''}`.trim();
         pill.onclick = () => openDetails(tool, dateStr, b);
+      } else {
+        // Нет брони на эту дату
+        pill.className = 'pill free';
+        pill.title = `${tool.code} ${tool.name}\n${dateStr}\nСвободен`;
       }
 
       cell.appendChild(pill);
@@ -335,9 +340,10 @@ function applySearch(){
 function openDetails(tool, dateStr, booking){
   dlgBody.innerHTML = `
     <div class="kv"><div class="k">Инструмент</div><div class="v">${(tool.code||'---')} ${tool.name||''}</div></div>
-    <div class="kv"><div class="k">Дата</div><div class="v">${dateStr}</div></div>
+    <div class="kv"><div class="k">Дата проката</div><div class="v">${dateStr}</div></div>
     <div class="kv"><div class="k">Клиент</div><div class="v">${booking.client || 'Клиент'}</div></div>
     <div class="kv"><div class="k">Заказ</div><div class="v">${booking.orderName || ''}</div></div>
+    <div class="kv"><div class="k">Статус</div><div class="v" style="color:#1b79d6; font-weight:900;">В ПРОКАТЕ</div></div>
   `;
   dlg.showModal();
 }
@@ -345,10 +351,33 @@ function openDetails(tool, dateStr, booking){
 elQ.addEventListener('input', applySearch);
 
 async function fetchToolsFromWorker(){
-  // Worker из сообщения отдаёт { tools: [...] } (без параметров недели)
-  const r = await fetch(WORKER_CALENDAR_URL, { cache: "no-store" });
-  if (!r.ok) throw new Error(`Worker HTTP ${r.status}`);
-  return await r.json();
+  try {
+    const r = await fetch(WORKER_CALENDAR_URL, { 
+      cache: "no-store",
+      headers: {
+        "Accept": "application/json"
+      }
+    });
+    
+    if (!r.ok) {
+      const errorText = await r.text();
+      console.error("Worker error:", r.status, errorText);
+      throw new Error(`Worker HTTP ${r.status}: ${errorText.slice(0, 100)}`);
+    }
+    
+    const data = await r.json();
+    
+    // Проверяем структуру ответа
+    if (!data.tools) {
+      console.warn("Worker вернул неожиданный формат:", data);
+      return { tools: [] };
+    }
+    
+    return data;
+  } catch (e) {
+    console.error("Fetch error:", e);
+    throw e;
+  }
 }
 
 function setApiStatus(ok, text){
@@ -367,15 +396,16 @@ async function refresh(force=false){
   renderHeader(week);
 
   if (!cacheTools.length || force){
-    elBody.innerHTML = `<div style="padding:26px; text-align:center; color:#6b7280; font-weight:800;">Загрузка данных…</div>`;
+    elBody.innerHTML = `<div style="padding:26px; text-align:center; color:#6b7280; font-weight:800;">Загрузка данных из МойСклад…</div>`;
     try{
       const data = await fetchToolsFromWorker();
       cacheTools = normalizeTools(data.tools || []);
-      setApiStatus(true, 'API: OK');
+      setApiStatus(true, `API: OK (${cacheTools.length} в прокате)`);
     } catch(e){
       setApiStatus(false, 'API: ошибка');
       elBody.innerHTML = `<div style="padding:26px; text-align:center; color:#ef4444; font-weight:900;">
-        Не удалось загрузить данные. Проверьте WORKER_CALENDAR_URL и CORS в воркере.
+        Не удалось загрузить данные из МойСклад.<br>
+        Проверьте WORKER_CALENDAR_URL и статус заказов.
       </div>`;
       return;
     }
@@ -384,6 +414,7 @@ async function refresh(force=false){
   renderGrid(cacheTools, week);
 }
 
+// Запуск при загрузке страницы
 refresh();
 </script>
 </body>
