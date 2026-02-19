@@ -37,6 +37,8 @@
     .busy{background:linear-gradient(135deg,#6a11cb 0%,#2575fc 100%);color:#fff;box-shadow:inset 0 0 0 1px rgba(255,255,255,.18)}
     .small{font-weight:800;opacity:.92;font-size:10px}
     .footerNote{padding:10px 12px;font-size:12px;color:#6b7280;background:#fbfdff;border-top:1px solid #eef2f7}
+    
+    /* Модальные окна */
     dialog{border:0;border-radius:14px;padding:0;box-shadow:0 20px 60px rgba(0,0,0,.25);width:min(520px,92vw)}
     .modalTop{padding:14px 14px;background:#111827;color:#fff;font-weight:900}
     .modalBody{padding:14px;background:#fff}
@@ -45,6 +47,20 @@
     .k{color:#6b7280;font-weight:800}
     .v{font-weight:900;color:#111827;text-align:right}
     .modalBtns{padding:12px 14px;display:flex;justify-content:flex-end;gap:10px;background:#fff;border-top:1px solid #eef2f7}
+    
+    /* Форма бронирования */
+    .form-group{margin-bottom:16px}
+    .form-label{display:block;margin-bottom:6px;font-weight:700;color:#374151}
+    .form-input{width:100%;padding:10px 12px;border:1px solid #d1d5db;border-radius:8px;font-size:15px}
+    .form-input:focus{outline:none;border-color:#1b79d6;box-shadow:0 0 0 3px rgba(27,121,214,0.1)}
+    .form-textarea{min-height:80px;resize:vertical}
+    .form-actions{display:flex;gap:10px;justify-content:flex-end;margin-top:20px}
+    
+    /* Кнопка + для создания брони */
+    .add-btn{position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);width:28px;height:28px;border-radius:50%;background:#1b79d6;color:white;display:flex;align-items:center;justify-content:center;font-size:18px;font-weight:bold;cursor:pointer;opacity:0;transition:opacity 0.2s}
+    .free:hover .add-btn{opacity:1}
+    .free{position:relative}
+    
     @media (max-width:820px){
       .hTool,.tool{flex-basis:210px}
       .cell,.hDay{min-width:100px;flex-basis:100px}
@@ -87,11 +103,41 @@
     </div>
   </div>
 
-  <dialog id="dlg">
+  <!-- Модальное окно деталей проката -->
+  <dialog id="dlgDetails">
     <div class="modalTop">Детали проката</div>
-    <div class="modalBody" id="dlgBody"></div>
+    <div class="modalBody" id="dlgDetailsBody"></div>
     <div class="modalBtns">
-      <button class="btn" id="dlgClose">Закрыть</button>
+      <button class="btn" id="dlgDetailsClose">Закрыть</button>
+    </div>
+  </dialog>
+
+  <!-- Модальное окно создания брони -->
+  <dialog id="dlgBooking">
+    <div class="modalTop">Новое бронирование</div>
+    <div class="modalBody">
+      <form id="bookingForm">
+        <div class="form-group">
+          <label class="form-label">Инструмент</label>
+          <input type="text" id="bookingTool" class="form-input" readonly>
+        </div>
+        <div class="form-group">
+          <label class="form-label">Дата</label>
+          <input type="text" id="bookingDate" class="form-input" readonly>
+        </div>
+        <div class="form-group">
+          <label class="form-label">Клиент</label>
+          <input type="text" id="bookingClient" class="form-input" placeholder="Введите имя клиента" required>
+        </div>
+        <div class="form-group">
+          <label class="form-label">Комментарий</label>
+          <textarea id="bookingComment" class="form-input form-textarea" placeholder="Дополнительная информация"></textarea>
+        </div>
+        <div class="form-actions">
+          <button type="button" class="btn ghost" id="bookingCancel">Отмена</button>
+          <button type="submit" class="btn primary">Забронировать</button>
+        </div>
+      </form>
     </div>
   </dialog>
 
@@ -100,6 +146,7 @@
 
   let weekOffset = 0;
   let cacheTools = [];
+  let currentBookingData = null;
 
   const elHead = document.getElementById('gridHead');
   const elBody = document.getElementById('gridBody');
@@ -107,14 +154,25 @@
   const elQ = document.getElementById('q');
   const elApiStatus = document.getElementById('apiStatus');
 
-  const dlg = document.getElementById('dlg');
-  const dlgBody = document.getElementById('dlgBody');
-  document.getElementById('dlgClose').onclick = () => dlg.close();
+  // Модальные окна
+  const dlgDetails = document.getElementById('dlgDetails');
+  const dlgDetailsBody = document.getElementById('dlgDetailsBody');
+  document.getElementById('dlgDetailsClose').onclick = () => dlgDetails.close();
 
+  const dlgBooking = document.getElementById('dlgBooking');
+  const bookingForm = document.getElementById('bookingForm');
+  const bookingTool = document.getElementById('bookingTool');
+  const bookingDate = document.getElementById('bookingDate');
+  const bookingClient = document.getElementById('bookingClient');
+  const bookingComment = document.getElementById('bookingComment');
+  document.getElementById('bookingCancel').onclick = () => dlgBooking.close();
+
+  // Кнопки навигации
   document.getElementById('btnPrev').onclick = () => { weekOffset--; refresh(); };
   document.getElementById('btnNext').onclick = () => { weekOffset++; refresh(); };
   document.getElementById('btnReload').onclick = () => refresh(true);
 
+  // Функции дат
   function startOfISOWeek(d){
     const x = new Date(d);
     const day = x.getDay() || 7;
@@ -167,15 +225,45 @@
   elQ.addEventListener('input', applySearch);
 
   function openDetails(tool, dateStr, booking){
-    dlgBody.innerHTML = `
+    dlgDetailsBody.innerHTML = `
       <div class="kv"><div class="k">Инструмент</div><div class="v">${(tool.code||'---')} ${tool.name||''}</div></div>
       <div class="kv"><div class="k">Дата</div><div class="v">${dateStr}</div></div>
       <div class="kv"><div class="k">Клиент</div><div class="v">${booking.client || 'Клиент'}</div></div>
       <div class="kv"><div class="k">Заказ</div><div class="v">${booking.orderName || ''}</div></div>
       <div class="kv"><div class="k">Статус</div><div class="v" style="color:#1b79d6;font-weight:900;">В ПРОКАТЕ</div></div>
     `;
-    dlg.showModal();
+    dlgDetails.showModal();
   }
+
+  function openBookingForm(tool, dateStr){
+    currentBookingData = { tool, dateStr };
+    bookingTool.value = `${tool.code || '---'} ${tool.name || ''}`;
+    bookingDate.value = dateStr;
+    bookingClient.value = '';
+    bookingComment.value = '';
+    dlgBooking.showModal();
+    bookingClient.focus();
+  }
+
+  bookingForm.addEventListener('submit', async (e) => {
+    e.preventDefault();
+    
+    const client = bookingClient.value.trim();
+    const comment = bookingComment.value.trim();
+    
+    if (!client) {
+      alert('Введите имя клиента');
+      return;
+    }
+    
+    // Здесь будет код для отправки данных в МойСклад
+    // Пока просто покажем сообщение
+    alert(`Бронирование создано!\n\nИнструмент: ${bookingTool.value}\nДата: ${bookingDate.value}\nКлиент: ${client}\nКомментарий: ${comment || 'нет'}`);
+    
+    dlgBooking.close();
+    // После создания брони можно обновить данные
+    setTimeout(() => refresh(true), 500);
+  });
 
   async function fetchToolsFromWorker(){
     const r = await fetch(WORKER_CALENDAR_URL, { cache:"no-store", headers: { "Accept":"application/json" }});
@@ -193,8 +281,6 @@
     elApiStatus.textContent = text || (ok ? 'API: OK' : 'API: ошибка');
   }
 
-  // Отрисовка: одна строка = один инструмент, справа "занят" в день момента заказа.
-  // (Это соответствует вашему текущему формату данных от воркера: tools[].bookings[])
   function renderGrid(tools, week){
     const frag = document.createDocumentFragment();
 
@@ -224,6 +310,8 @@
           pill.onclick = () => openDetails(tool, dateStr, booking);
         } else {
           pill.className = 'pill free';
+          pill.innerHTML = '<div class="add-btn">+</div>';
+          pill.onclick = () => openBookingForm(tool, dateStr);
         }
 
         cell.appendChild(pill);
@@ -265,4 +353,3 @@
 </script>
 </body>
 </html>
-
