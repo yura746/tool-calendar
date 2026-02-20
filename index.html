@@ -302,7 +302,7 @@
       dlgList.showModal();
 
       try {
-        const url = `${WORKER_CALENDAR_URL}/${endpoint}?tg_hash=${tg_hash}&tg_data=${encodeURIComponent(tg_data)}`;
+        const url = `${WORKER_CALENDAR_URL}?mode=${endpoint}&tg_hash=${tg_hash}&tg_data=${encodeURIComponent(tg_data)}`;
         const r = await fetch(url);
         const data = await r.json();
 
@@ -493,6 +493,7 @@
   </script>
 </body>
 </html>
+
 
 
 
